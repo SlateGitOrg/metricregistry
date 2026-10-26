@@ -1,4 +1,4 @@
-"""The 60-second artefact: three numbers, and exactly why they differ.
+"""A walkthrough: three numbers, and exactly why they differ.
 
 Run: python -m src.demo
 """

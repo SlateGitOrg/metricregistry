@@ -1,137 +1,127 @@
 # metricregistry
 
-> Executable KPI definitions with a divergence monitor, so three teams stop quoting three different enrolment numbers.
+Executable, versioned KPI definitions with a divergence monitor that flags when metrics claiming to measure the same thing disagree.
 
-`COMPACT` · **Business Analyst** · Intermediate · ~5 days · Education - university enrolment reporting
+[![ci](https://github.com/SlateGitOrg/metricregistry/actions/workflows/ci.yml/badge.svg)](https://github.com/SlateGitOrg/metricregistry/actions/workflows/ci.yml)
 
-**Primary language:** SQL
-**Tags:** `semantic-layer`, `dbt`, `metrics`, `sql`, `governance`, `data-quality`
+## Why
 
----
+Finance, the registrar and marketing each report a different number of enrolled
+students. All three are defensible: they use different census dates and treat
+withdrawals and deferrals differently. A glossary written in English cannot fix
+this, because it drifts from the SQL and has no way to notice. In metricregistry
+a definition *is* its SQL, so it executes, produces a value, and can be compared
+against every other definition of the same subject.
 
-> **Implementation note.** The catalogue specifies **SQL** for this
-> project and that remains the target. This repository ships a runnable
-> **Python** reference implementation of the core differentiator so the
-> behaviour is executable and tested today; port it to SQL as step one
-> of your own build.
+## Features
 
-## The problem
+- Versioned metric definitions carrying SQL, grain, owner, description and tolerance.
+- Immutable versions: registering an existing `name@version` raises, so amendments become new versions.
+- Divergence monitor that evaluates every definition and compares each pair that shares a subject, worst gap first.
+- Per-pair tolerance (the tighter of the two definitions wins), with a negative case so the monitor stays quiet when definitions agree.
+- Definition change log showing how far a number moved because its *definition* changed.
+- Column lineage for each definition.
+- Synthetic student cohort with ambiguous cases and ground-truth counts per definition.
 
-Finance reports 14,200 enrolled students. The registrar reports 13,850. Marketing reports 14,600. All three are correct - they use different census dates and different treatments of deferrals - but the meeting spends forty minutes arguing about the number instead of making the decision the number was for.
+## Architecture
 
-## ⭐ The differentiator
-
-Definitions are **executable and continuously reconciled**: each KPI is stored with its SQL, grain, filters and owner, and a scheduled job **recomputes every definition and alerts when two nominally-identical metrics diverge beyond tolerance**. A generic metrics dictionary is a wiki page describing metrics in English, which drifts from the SQL immediately and has no mechanism to notice.
-
-This is the sentence to lead with when someone asks you to walk through the
-project. Everything else in this repo exists to make it true and to prove it.
-
-## Data
-
-A synthetic student-record generator with deliberately ambiguous cases - deferrals, mid-census withdrawals, dual enrolment - and **documented correct values under each definition**, so the registry can be tested rather than merely populated.
-
-> No paid API key is required to run or demo this project. Where a paid
-> service would add value it is wired as an optional enhancement behind an
-> interface with an offline mock as the default implementation.
-
-## Stack
-
-- SQL on DuckDB / PostgreSQL
-- dbt with MetricFlow-style definitions
-- Python for the divergence monitor
-- Streamlit
-- dbt tests
-
-## Core capabilities
-
-- Versioned metric definitions carrying grain, filters, owner and business description
-- Executable definitions producing values, not prose
-- Divergence monitor comparing metrics declared equivalent and alerting on tolerance breach
-- Lineage from each metric down to its source columns
-- Definition-change log showing when a number moved because the *definition* moved
-
-## Repository layout
-
-```
-metrics/
-models/
-monitor/
-generator/
-app/
-tests/
+```mermaid
+flowchart LR
+  F["fixtures.py<br/>student cohort + ground truth"] --> DB[("SQLite<br/>in-memory")]
+  R["Registry<br/>versioned MetricDefinitions"] --> E["evaluate()"]
+  DB --> E
+  E --> M["check_divergence()<br/>pairwise by subject"]
+  E --> C["definition_changes()<br/>old vs new version"]
+  R --> L["lineage_of()<br/>columns read"]
+  M --> D["demo.py report"]
+  C --> D
+  L --> D
 ```
 
-## Build plan
+Definitions live in a `Registry`. `evaluate` runs a definition's SQL against a
+SQLite connection. The monitor groups current definitions by `subject` and
+compares every pair; the change log evaluates consecutive versions of the same
+metric. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-1. Encode the three competing definitions exactly as they are used today. Do not harmonise them yet - the disagreement is the finding.
-2. Make them executable and show the three numbers side by side with their differences named.
-3. Divergence monitor, then the change log.
-4. Only then propose a canonical definition.
+## Quick start
 
-## Testing strategy
-
-Assert each definition returns the **documented correct value on every ambiguous case** - deferral, mid-census withdrawal, dual enrolment. Assert the divergence monitor fires when a definition is edited, which is the behaviour that keeps the registry honest over time.
-
-Tests assert **correctness**, not merely that the code runs. A green suite on
-this repo is a claim about behaviour under adversarial conditions; treat any
-test that would pass against a deliberately broken implementation as a bug in
-the test.
-
-## Quality & safety layer
-
-Every published number carries its definition version. A metric whose definition changed since the last publication is flagged in the output rather than silently restated.
-
-## Measurable outcome
-
-> One page showing all three enrolment numbers, the exact definitional difference between each pair, and which one policy says to use - ending a recurring forty-minute argument.
-
-State it in these terms — business units, not technical ones — in your CV
-bullet and in the first thirty seconds of describing the project.
-
-## Interview questions this project answers
-
-- **Three teams have three numbers. How do you resolve it?**
-- **What belongs in a metric definition beyond the SQL?**
-- **How do you detect that a metric definition has drifted?**
-
-## What this deliberately is *not*
-
-- Not a BI tool. It governs definitions; your BI tool renders them.
-
-
-## Run it now
+Requires Python 3.11+. There are no dependencies; everything uses the standard library.
 
 ```bash
-python -m unittest discover -s tests -v   # the suite
-python -m src.demo                        # the 60-second artefact
-```
-
-Requires Python 3.11+. The runnable core uses **only the standard
-library** (including `sqlite3`), so there is nothing to install.
-
-## Getting started
-
-```bash
-git clone <your-fork-url> metricregistry
+git clone https://github.com/SlateGitOrg/metricregistry.git
 cd metricregistry
-pip install -e .
-python -m generator --students 20000
-dbt build
-python -m monitor check        # divergence across equivalent metrics
-streamlit run app/main.py
+python -m unittest discover -s tests -v   # run the tests
+python -m src.demo                        # run the walkthrough
 ```
 
-Docker is supported but optional — every path above works on a plain
-Windows/macOS/Linux laptop without a cloud account.
+## Example
 
-## Definition of done
+`python -m src.demo` (trimmed):
 
-- [ ] The differentiator above is implemented, and a test proves it
-- [ ] The measurable outcome is produced by a command anyone can run
-- [ ] `README` explains the one decision a generic version gets wrong
-- [ ] CI runs the full suite on every push and is green on `main`
-- [ ] A recruiter can see the headline artefact in under 60 seconds
+```text
+  THE NUMBERS IN THE ROOM
+    finance             13,990   Fee-liable students: enrolled at any point up to the census date and not withdrawn by it.
+    marketing           14,560   Conversions: anyone who ever enrolled, ...
+    registry-office     13,570   Students enrolled on or before term start who had not withdrawn or deferred ...
 
-## Licence
+  THE MONITOR
+    [ALERT] enrolled_students: enrolled_students_marketing (v1) = 14,560 vs enrolled_students_registrar (v1) = 13,570 (6.80% apart, tolerance 0.50%)
+    [ALERT] enrolled_students: enrolled_students_finance (v1) = 13,990 vs enrolled_students_marketing (v1) = 14,560 (3.91% apart, tolerance 0.50%)
+    [ALERT] enrolled_students: enrolled_students_finance (v1) = 13,990 vs enrolled_students_registrar (v1) = 13,570 (3.00% apart, tolerance 0.50%)
+    [ok   ] applications: applications_received (v1) = 17,100 vs applications_total (v1) = 17,100 (0.00% apart, tolerance 0.50%)
+
+  WHEN A NUMBER MOVES BECAUSE THE DEFINITION MOVED
+    enrolled_students_finance v1 -> v2: 14,560 -> 14,300 (-260)
+```
+
+Using the library directly:
+
+```python
+from src.fixtures import REGISTRY, build
+from src.registry import breaches
+
+conn, expected = build()
+for d in breaches(conn, REGISTRY):
+    print(d.describe())
+```
+
+## How it works
+
+- **Evaluation.** `evaluate(conn, definition)` runs the SQL and takes the first column of the first row; no row or NULL becomes `0.0`.
+- **Divergence.** Relative gap is `|a - b| / max(|a|, |b|)`. A pair breaches when the gap exceeds the smaller of the two tolerances (default 0.5%).
+- **Change log.** For each consecutive pair of versions, both are evaluated on the same data and the difference is reported, separating definition-driven movement from real movement.
+- **Lineage.** Regular expressions pick out `table.column` references and columns in `WHERE`/`AND`/`OR` comparisons. It is deliberately conservative, not a SQL parser.
+- **Fixture ground truth.** `build()` returns expected counts per definition computed from the cohort's known case sizes, not from the SQL, so tests check definitions against an independent answer.
+
+## Testing
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The 16 tests cover: each definition returning its documented value on the
+ambiguous cases (withdrawal before and after census, late enrolment, deferral,
+dual enrolment), the three enrolment numbers differing, the monitor firing on
+enrolment and staying silent on applications, pair coverage and ordering, tolerance
+selection, version immutability, the change log, and lineage.
+
+## Project layout
+
+```text
+src/registry.py     definitions, registry, evaluator, monitor, change log, lineage
+src/fixtures.py     synthetic student cohort, ground truth, sample registry
+src/demo.py         side-by-side report
+tests/              unittest suite
+docs/               architecture notes
+```
+
+## Limitations
+
+- SQLite only; definitions are plain SQL strings, not a dbt or MetricFlow model.
+- The monitor is a function, not a scheduler or alerting service, and there is no UI.
+- Lineage is regex-based and can miss or over-report columns in complex SQL.
+- It does not pick a canonical definition; that is a policy decision.
+
+## License
 
 MIT — see [LICENSE](LICENSE).

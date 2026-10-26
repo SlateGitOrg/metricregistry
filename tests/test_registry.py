@@ -56,12 +56,12 @@ class TestDefinitionsAreExecutable(Base):
 
 
 class TestDivergenceMonitor(Base):
-    def test_THE_HEADLINE_the_monitor_fires_on_the_enrolment_disagreement(self):
+    def test_the_monitor_fires_on_the_enrolment_disagreement(self):
         fired = breaches(self.conn, REGISTRY)
         subjects = {d.subject for d in fired}
         self.assertIn("enrolled_students", subjects)
 
-    def test_THE_NEGATIVE_CASE_it_does_not_fire_where_everyone_agrees(self):
+    def test_it_does_not_fire_where_everyone_agrees(self):
         # A monitor that fires on everything gets muted, at which point it is
         # not a monitor.
         fired = breaches(self.conn, REGISTRY)
@@ -115,7 +115,7 @@ class TestVersioning(Base):
         self.assertEqual(r.current("m").version, 2)
         self.assertEqual(r.at_version("m", 1).version, 1)
 
-    def test_THE_CHANGE_LOG_shows_when_a_number_moved_because_the_DEFINITION_moved(self):
+    def test_change_log_shows_when_a_number_moved_because_the_definition_moved(self):
         r = Registry()
         r.register(MetricDefinition("m", 1, "s", "g", "o", "d" * 40,
                                     "SELECT COUNT(*) FROM student"))

@@ -1,7 +1,5 @@
 """Executable metric definitions, and the monitor that keeps them honest.
 
-THE DIFFERENTIATOR LIVES HERE.
-
 Finance reports 14,200 enrolled students. The registrar reports 13,850.
 Marketing reports 14,600. All three are correct - they use different census
 dates and different treatments of deferrals - and the meeting spends forty
